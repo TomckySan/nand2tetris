@@ -1,14 +1,47 @@
-// This file is part of www.nand2tetris.org
-// and the book "The Elements of Computing Systems"
-// by Nisan and Schocken, MIT Press.
-// File name: projects/04/Fill.asm
+    @switch_state
+    M=-1
+    D=0
+    @SWITCH_STATE_LOOP
+    0;JMP
 
-// Runs an infinite loop that listens to the keyboard input.
-// When a key is pressed (any key), the program blackens the screen,
-// i.e. writes "black" in every pixel;
-// the screen should remain fully black as long as the key is pressed. 
-// When no key is pressed, the program clears the screen, i.e. writes
-// "white" in every pixel;
-// the screen should remain fully clear as long as no key is pressed.
+(MAIN_LOOP)
+    @KBD
+    D=M
+    @SWITCH_STATE_LOOP
+    D;JEQ // D == 0 is no key input
+    D=-1
 
-// Put your code here.
+(SWITCH_STATE_LOOP)
+    @temp_state
+    M=D
+
+    @switch_state
+    D=D-M // -1 or key ascii
+    @MAIN_LOOP
+    D;JEQ
+
+    @temp_state
+    D=M
+    @switch_state
+    M=D // -1 or 0
+
+    @SCREEN
+    D=A
+    @8192
+    D=D+A
+    @i
+    M=D
+
+(SCREEN_LOOP)
+    @i
+    D=M-1
+    M=D
+    @MAIN_LOOP
+    D;JLT
+    @switch_state
+    D=M
+    @i
+    A=M
+    M=D
+    @SCREEN_LOOP
+    0;JMP
