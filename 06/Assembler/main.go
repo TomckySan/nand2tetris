@@ -14,48 +14,78 @@ func generateCommandsFromFile(filePath string) []string {
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		// TODO
+		fmt.Println(err)
 	}
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		commands = append(commands, strings.TrimSpace(scanner.Text()))
+		spaceTrimedLine := strings.TrimSpace(scanner.Text())
+		if len(spaceTrimedLine) == 0 || strings.HasPrefix(spaceTrimedLine, "//") {
+			continue // Comment line skip.
+		}
+		commands = append(commands, strings.TrimSpace(strings.Split(spaceTrimedLine, "//")[0]))
 	}
 
 	return commands
 }
 
-func main() {
-	commands := generateCommandsFromFile(os.Args[1])
+// First Path: Only creating symbol table
+func firstPath(commands []string, symbolTable *assembler.SymbolTable) {
 	parser := assembler.Parser{Commands: commands, CurrentCommand: ""}
-	code := new(assembler.Code)
+	romAddress := 0
 	commandType := ""
 
+	for parser.HasMoreCommands() {
+		parser.Advance() // read next command
+		commandType = parser.CommandType()
+
+		if commandType == "A_COMMAND" || commandType == "C_COMMAND" {
+			romAddress++
+		} else if commandType == "L_COMMAND" {
+			symbolTable.AddEntry(parser.Symbol(), romAddress)
+		} else {
+			// Ignore
+		}
+	}
+}
+
+// Second Path:
+func secondPath(commands []string, symbolTable *assembler.SymbolTable) {
+	// Open output file
 	asmFileNameTrimExtension := strings.Trim(os.Args[1], ".asm")
 	hackFileName := fmt.Sprintf("%s.hack", asmFileNameTrimExtension)
 	hackFile, hackFileOpenErr := os.Create(hackFileName)
 	if hackFileOpenErr != nil {
-		// TODO
+		fmt.Println(hackFileOpenErr)
 	}
 	defer hackFile.Close()
 
+	// Definition
+	parser := assembler.Parser{Commands: commands, CurrentCommand: ""}
+	commandType := ""
 	hackFileLine := ""
+	code := new(assembler.Code)
 
 	for parser.HasMoreCommands() {
-		parser.Advance()
+		parser.Advance() // read next command
 		commandType = parser.CommandType()
 
 		switch commandType {
 		case "A_COMMAND":
 			hackFileLine = "0"
-
 			symbol := parser.Symbol()
 			if symbolInt, err := strconv.Atoi(symbol); err == nil {
 				hackFileLine += fmt.Sprintf("%015b", symbolInt)
 				fmt.Fprintln(hackFile, hackFileLine)
+			} else if symbolTable.Contains(symbol) {
+				hackFileLine += fmt.Sprintf("%015b", symbolTable.GetAddress(symbol))
+				fmt.Fprintln(hackFile, hackFileLine)
 			} else {
-				// TODO
+				hackFileLine += fmt.Sprintf("%015b", symbolTable.GetNextAddress())
+				fmt.Fprintln(hackFile, hackFileLine)
+				symbolTable.AddEntry(parser.Symbol(), symbolTable.GetNextAddress())
+				symbolTable.IncrementNextAddress()
 			}
 
 		case "C_COMMAND":
@@ -82,9 +112,17 @@ func main() {
 			fmt.Fprintln(hackFile, hackFileLine)
 
 		case "L_COMMAND":
-			// TODO
+			// Ignore
 		default:
-			// TODO
+			// Ignore
 		}
 	}
+}
+
+func main() {
+	commands := generateCommandsFromFile(os.Args[1])
+	symbolTable := assembler.NewSymbolTable()
+
+	firstPath(commands, symbolTable)
+	secondPath(commands, symbolTable)
 }
