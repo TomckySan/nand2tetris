@@ -20,12 +20,28 @@ func (p *Parser) Advance() {
 }
 
 func (p Parser) CommandType() string {
-	// TODO
+	command := strings.Fields(p.CurrentCommand)[0]
 	switch {
 	case p.isArithmetic(p.CurrentCommand):
 		return "C_ARITHMETIC"
-	default:
+	case command == "push":
 		return "C_PUSH"
+	case command == "pop":
+		return "C_POP"
+	case command == "label":
+		return "C_LABEL"
+	case command == "goto":
+		return "C_GOTO"
+	case command == "if-goto":
+		return "C_IF"
+	case command == "function":
+		return "C_FUNCTION"
+	case command == "call":
+		return "C_CALL"
+	case command == "return":
+		return "C_RETURN"
+	default:
+		return ""
 	}
 }
 
@@ -50,28 +66,18 @@ func (p Parser) Arg1() string {
 	case "C_PUSH":
 		return strings.Fields(command)[1]
 	case "C_POP":
-		// TODO
-		return ""
+		return strings.Fields(command)[1]
 	case "C_LABEL":
-		// TODO
-		return ""
+		return strings.Fields(command)[1]
 	case "C_GOTO":
-		// TODO
-		return ""
+		return strings.Fields(command)[1]
 	case "C_IF":
-		// TODO
-		return ""
+		return strings.Fields(command)[1]
 	case "C_FUNCTION":
-		// TODO
-		return ""
-	case "C_RETURN":
-		// TODO
-		return ""
+		return strings.Fields(command)[1]
 	case "C_CALL":
-		// TODO
-		return ""
+		return strings.Fields(command)[1]
 	default:
-		// TODO
 		return ""
 	}
 }

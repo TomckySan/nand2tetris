@@ -10,6 +10,7 @@ type CodeWriter struct {
 	filePath string
 	asmFile  *os.File
 	labelNum int
+	vmFile   string
 }
 
 func (self *CodeWriter) initialize() {
@@ -31,9 +32,9 @@ func NewCodeWriter(filePath string) *CodeWriter {
 	return codeWriter
 }
 
-// func (self CodeWriter) setFileName(fileName string) {
-// 	// vmFile := fileName
-// }
+func (self *CodeWriter) SetFileName(fileName string) {
+	self.vmFile = fileName
+}
 
 func (self *CodeWriter) writeBinaryFunction(command string) {
 	self.writePop()
@@ -122,14 +123,123 @@ func (self *CodeWriter) WriteArithmetic(command string) {
 }
 
 func (self CodeWriter) WritePushPop(command string, segment string, index int) {
-	// push constant index
-	fmt.Fprintln(self.asmFile, fmt.Sprintf("@%d", index))
-	fmt.Fprintln(self.asmFile, "D=A")
-	fmt.Fprintln(self.asmFile, "@SP")   // SPのアドレスを参照
-	fmt.Fprintln(self.asmFile, "A=M")   // SP値をAレジスタへ（MはSP値と同じアドレスを参照するようになる）
-	fmt.Fprintln(self.asmFile, "M=D")   // MへDレジスタの値を設定
-	fmt.Fprintln(self.asmFile, "@SP")   // SPのアドレスを参照
-	fmt.Fprintln(self.asmFile, "M=M+1") // SP値を加算→SPが指す場所を1つ進める
+	if command == "C_PUSH" {
+		switch segment {
+		case "constant":
+			fmt.Fprintln(self.asmFile, fmt.Sprintf("@%d", index))
+			fmt.Fprintln(self.asmFile, "D=A")
+			self.writePush()
+		case "local":
+			fmt.Fprintln(self.asmFile, "@LCL") // LCLのアドレスを参照
+			self.writePushForSegment(index)
+		case "argument":
+			fmt.Fprintln(self.asmFile, "@ARG") // ARGのアドレスを参照
+			self.writePushForSegment(index)
+		case "this":
+			fmt.Fprintln(self.asmFile, "@THIS") // THISのアドレスを参照
+			self.writePushForSegment(index)
+		case "that":
+			fmt.Fprintln(self.asmFile, "@THAT") // THATのアドレスを参照
+			self.writePushForSegment(index)
+		case "pointer":
+			fmt.Fprintln(self.asmFile, "@3")
+			for i := 0; i < index; i++ {
+				fmt.Fprintln(self.asmFile, "A=A+1") // +index番目の要素へのアクセスがしたいのでそこまでアドレスの参照を進める
+			}
+			fmt.Fprintln(self.asmFile, "D=M") // 参照アドレスの値をDレジスタへ
+			self.writePush()                  // Dレジスタの値をpush
+		case "temp":
+			fmt.Fprintln(self.asmFile, "@5")
+			for i := 0; i < index; i++ {
+				fmt.Fprintln(self.asmFile, "A=A+1") // +index番目の要素へのアクセスがしたいのでそこまでアドレスの参照を進める
+			}
+			fmt.Fprintln(self.asmFile, "D=M") // 参照アドレスの値をDレジスタへ
+			self.writePush()                  // Dレジスタの値をpush
+		case "static":
+			fmt.Fprintln(self.asmFile, fmt.Sprintf("@%s.%d", self.vmFile, index))
+			fmt.Fprintln(self.asmFile, "D=M") // 参照アドレスの値をDレジスタへ
+			self.writePush()                  // Dレジスタの値をpush
+		default:
+		}
+	} else if command == "C_POP" {
+		switch segment {
+		case "local":
+			self.writePop()
+			fmt.Fprintln(self.asmFile, "D=M")  // 参照アドレスの値をDレジスタへ
+			fmt.Fprintln(self.asmFile, "@LCL") // LCLのアドレスを参照
+			fmt.Fprintln(self.asmFile, "A=M")  // 参照値をAレジスタへ（Mは参照値と同じアドレスを参照するようになる）
+			for i := 0; i < index; i++ {
+				fmt.Fprintln(self.asmFile, "A=A+1") // +index番目の要素へのアクセスがしたいのでそこまでアドレスの参照を進める
+			}
+			fmt.Fprintln(self.asmFile, "M=D") // MへDレジスタの値を設定
+			// ================
+			// ================
+		case "argument":
+			self.writePop()
+			fmt.Fprintln(self.asmFile, "D=M")  // 参照アドレスの値をDレジスタへ
+			fmt.Fprintln(self.asmFile, "@ARG") // ARGのアドレスを参照
+			fmt.Fprintln(self.asmFile, "A=M")  // 参照値をAレジスタへ（Mは参照値と同じアドレスを参照するようになる）
+			for i := 0; i < index; i++ {
+				fmt.Fprintln(self.asmFile, "A=A+1") // +index番目の要素へのアクセスがしたいのでそこまでアドレスの参照を進める
+			}
+			fmt.Fprintln(self.asmFile, "M=D") // MへDレジスタの値を設定
+			// ================
+			// ================
+		case "this":
+			self.writePop()
+			fmt.Fprintln(self.asmFile, "D=M")   // 参照アドレスの値をDレジスタへ
+			fmt.Fprintln(self.asmFile, "@THIS") // THISのアドレスを参照
+			fmt.Fprintln(self.asmFile, "A=M")   // 参照値をAレジスタへ（Mは参照値と同じアドレスを参照するようになる）
+			for i := 0; i < index; i++ {
+				fmt.Fprintln(self.asmFile, "A=A+1") // +index番目の要素へのアクセスがしたいのでそこまでアドレスの参照を進める
+			}
+			fmt.Fprintln(self.asmFile, "M=D") // MへDレジスタの値を設定
+			// ================
+			// ================
+		case "that":
+			self.writePop()
+			fmt.Fprintln(self.asmFile, "D=M")   // 参照アドレスの値をDレジスタへ
+			fmt.Fprintln(self.asmFile, "@THAT") // THATのアドレスを参照
+			fmt.Fprintln(self.asmFile, "A=M")   // 参照値をAレジスタへ（Mは参照値と同じアドレスを参照するようになる）
+			for i := 0; i < index; i++ {
+				fmt.Fprintln(self.asmFile, "A=A+1") // +index番目の要素へのアクセスがしたいのでそこまでアドレスの参照を進める
+			}
+			fmt.Fprintln(self.asmFile, "M=D") // MへDレジスタの値を設定
+			// ================
+			// ================
+		case "pointer":
+			self.writePop()
+			fmt.Fprintln(self.asmFile, "D=M") // 参照アドレスの値をDレジスタへ
+			fmt.Fprintln(self.asmFile, "@3")
+			for i := 0; i < index; i++ {
+				fmt.Fprintln(self.asmFile, "A=A+1") // +index番目の要素へのアクセスがしたいのでそこまでアドレスの参照を進める
+			}
+			fmt.Fprintln(self.asmFile, "M=D") // MへDレジスタの値を設定
+		case "temp":
+			self.writePop()
+			fmt.Fprintln(self.asmFile, "D=M") // 参照アドレスの値をDレジスタへ
+			fmt.Fprintln(self.asmFile, "@5")
+			for i := 0; i < index; i++ {
+				fmt.Fprintln(self.asmFile, "A=A+1") // +index番目の要素へのアクセスがしたいのでそこまでアドレスの参照を進める
+			}
+			fmt.Fprintln(self.asmFile, "M=D") // MへDレジスタの値を設定
+		case "static":
+			self.writePop()
+			fmt.Fprintln(self.asmFile, "D=M") // 参照アドレスの値をDレジスタへ
+			fmt.Fprintln(self.asmFile, fmt.Sprintf("@%s.%d", self.vmFile, index))
+			fmt.Fprintln(self.asmFile, "M=D") // MへDレジスタの値を設定
+		default:
+		}
+	}
+}
+
+func (self *CodeWriter) writePushForSegment(index int) {
+	fmt.Fprintln(self.asmFile, "A=M") // 参照値をAレジスタへ（Mは参照値と同じアドレスを参照するようになる）
+	for i := 0; i < index; i++ {
+		fmt.Fprintln(self.asmFile, "A=A+1") // +index番目の要素へのアクセスがしたいのでそこまでアドレスの参照を進める
+	}
+	fmt.Fprintln(self.asmFile, "D=M") // 参照アドレスの値をDレジスタへ
+	self.writePush()                  // Dレジスタの値をpush
 }
 
 func (self *CodeWriter) Close() {

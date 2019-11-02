@@ -34,6 +34,8 @@ func main() {
 	commands := generateCommandsFromFile(vmFilePath)
 	parser := modules.Parser{Commands: commands, CurrentCommand: ""}
 	codeWriter := modules.NewCodeWriter(vmFilePath)
+	vmFilePathSplitedSlash := strings.Split(vmFilePath, "/")
+	codeWriter.SetFileName(vmFilePathSplitedSlash[len(vmFilePathSplitedSlash)-1])
 	commandType := ""
 
 	for parser.HasMoreCommands() {
@@ -46,25 +48,25 @@ func main() {
 		case "C_PUSH":
 			segment := parser.Arg1()
 			index := parser.Arg2()
-			codeWriter.WritePushPop("C_PUSH", segment, index)
+			codeWriter.WritePushPop(commandType, segment, index)
 		case "C_POP":
-			// TODO
+			segment := parser.Arg1()
+			index := parser.Arg2()
+			codeWriter.WritePushPop(commandType, segment, index)
 		case "C_LABEL":
-			// TODO
+			// ここでは実装しない
 		case "C_GOTO":
-			// TODO
+			// ここでは実装しない
 		case "C_IF":
-			// TODO
+			// ここでは実装しない
 		case "C_FUNCTION":
-			// TODO
+			// ここでは実装しない
 		case "C_RETURN":
-			// TODO
+			// ここでは実装しない
 		case "C_CALL":
-			// TODO
+			// ここでは実装しない
 		default:
-			// TODO
 		}
-
 	}
 
 	codeWriter.Close() // Close output file.
