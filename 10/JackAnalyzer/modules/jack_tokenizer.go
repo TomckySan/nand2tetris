@@ -63,7 +63,6 @@ func (self *JackTokenizer) Advance() bool {
 	}
 
 	self.currentToken = self.currentLineTokens[self.currentLineTokensIndex]
-	// fmt.Println(self.currentToken) // TODO: Advanceを呼ぶごとにcurrentTokenを確認（デバッグ）
 	self.currentLineTokensIndex++
 
 	return true

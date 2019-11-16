@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -21,33 +20,24 @@ func main() {
 			return nil
 		}
 		tokenizer := modules.NewJackTokenizer(filePath)
+		tokenizer.Advance()
 
-		outputTXmlFileName := strings.TrimSuffix(getFileName(filePath), ".jack") + "T.xml"
-		outputTXmlFile, outputTXmlFileErr := os.Create(outputTXmlFileName)
-		if outputTXmlFileErr != nil {
-			fmt.Println(outputTXmlFileErr)
+		// TXML
+		// outputTXmlFileName := strings.TrimSuffix(getFileName(filePath), ".jack") + "T.xml"
+		// outputTXmlFile, outputTXmlFileErr := os.Create(outputTXmlFileName)
+		// if outputTXmlFileErr != nil {
+		// 	fmt.Println(outputTXmlFileErr)
+		// }
+		// XML
+		outputXmlFileName := strings.TrimSuffix(getFileName(filePath), ".jack") + ".xml"
+		outputXmlFile, outputXmlFileErr := os.Create(outputXmlFileName)
+		if outputXmlFileErr != nil {
+			fmt.Println(outputXmlFileErr)
 		}
 
-		fmt.Fprintln(outputTXmlFile, "<tokens>")
-		for {
-			if !tokenizer.Advance() {
-				break
-			}
-			s := ""
-			if tokenizer.TokenType() == "KEYWORD" {
-				s = "<keyword> " + tokenizer.KeyWord() + " </keyword>"
-			} else if tokenizer.TokenType() == "SYMBOL" {
-				s = "<symbol> " + tokenizer.Symbol() + " </symbol>"
-			} else if tokenizer.TokenType() == "IDENTIFIER" {
-				s = "<identifier> " + tokenizer.Identifier() + " </identifier>"
-			} else if tokenizer.TokenType() == "INT_CONST" {
-				s = "<integerConstant> " + strconv.Itoa(tokenizer.IntVal()) + " </integerConstant>"
-			} else if tokenizer.TokenType() == "STRING_CONST" {
-				s = "<stringConstant> " + tokenizer.StringVal() + " </stringConstant>"
-			}
-			fmt.Fprintln(outputTXmlFile, s)
-		}
-		fmt.Fprintln(outputTXmlFile, "</tokens>")
+		compilationEngine := modules.NewCompilationEngine(tokenizer, outputXmlFile)
+		compilationEngine.CompileClass()
+
 		return nil
 	})
 }
