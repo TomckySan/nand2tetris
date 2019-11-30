@@ -8,27 +8,31 @@ import (
 
 type CompilationEngine struct {
 	tokenizer     *JackTokenizer
+	symbolTable   *SymbolTable
 	outputXmlFile *os.File
 }
 
-func (self *CompilationEngine) initialize(tokenizer *JackTokenizer, outputXmlFile *os.File) {
+func (self *CompilationEngine) initialize(tokenizer *JackTokenizer, symbolTable *SymbolTable, outputXmlFile *os.File) {
 	self.tokenizer = tokenizer
+	self.symbolTable = symbolTable
 	self.outputXmlFile = outputXmlFile
 }
 
-func NewCompilationEngine(tokenizer *JackTokenizer, outputXmlFile *os.File) *CompilationEngine {
+func NewCompilationEngine(tokenizer *JackTokenizer, symbolTable *SymbolTable, outputXmlFile *os.File) *CompilationEngine {
 	compilationEngine := &CompilationEngine{}
-	compilationEngine.initialize(tokenizer, outputXmlFile)
+	compilationEngine.initialize(tokenizer, symbolTable, outputXmlFile)
 	return compilationEngine
 }
 
 func (self *CompilationEngine) CompileClass() {
+	self.symbolTable.StartSubroutine()
+
 	self.outputToXmlFile("<class>")
 
 	self.outputToXmlFile("<keyword> " + self.tokenizer.KeyWord() + " </keyword>") // 'class'
 	self.tokenizer.Advance()
 
-	self.outputToXmlFile("<identifier> " + self.tokenizer.Identifier() + " </identifier>") // className
+	self.outputToXmlFile("<identifier category=class> " + self.tokenizer.Identifier() + " </identifier>") // className
 	self.tokenizer.Advance()
 
 	self.outputToXmlFile("<symbol> " + self.tokenizer.Symbol() + " </symbol>") // '{'
@@ -53,13 +57,16 @@ func (self *CompilationEngine) CompileClass() {
 func (self *CompilationEngine) compileClassVarDec() {
 	self.outputToXmlFile("<classVarDec>")
 
-	self.outputToXmlFile("<keyword> " + self.tokenizer.KeyWord() + " </keyword>") // ('static'|'field')
+	kind := self.tokenizer.KeyWord()
+	self.outputToXmlFile("<keyword> " + kind + " </keyword>") // ('static'|'field')
 	self.tokenizer.Advance()
 
-	self.resolveType() // type
+	typeName := self.resolveType() // type
 	self.tokenizer.Advance()
 
-	self.outputToXmlFile("<identifier> " + self.tokenizer.KeyWord() + " </identifier>") // varName
+	name := self.tokenizer.Identifier()
+	self.symbolTable.Define(name, typeName, kind)
+	self.outputToXmlFile("<identifier category=" + self.symbolTable.KindOf(name) + " kind=" + self.symbolTable.KindOf(name) + " index=" + strconv.Itoa(self.symbolTable.IndexOf(name)) + " defined> " + name + " </identifier>") // varName
 	self.tokenizer.Advance()
 
 	for {
@@ -72,7 +79,9 @@ func (self *CompilationEngine) compileClassVarDec() {
 		if self.tokenizer.TokenType() == "SYMBOL" && self.tokenizer.Symbol() == "," {
 			self.outputToXmlFile("<symbol> " + self.tokenizer.Symbol() + " </symbol>") // ','
 		} else if self.tokenizer.TokenType() == "IDENTIFIER" {
-			self.outputToXmlFile("<identifier> " + self.tokenizer.Identifier() + " </identifier>") // varName
+			name := self.tokenizer.Identifier()
+			self.symbolTable.Define(name, typeName, kind)
+			self.outputToXmlFile("<identifier category=" + self.symbolTable.KindOf(name) + " kind=" + self.symbolTable.KindOf(name) + " index=" + strconv.Itoa(self.symbolTable.IndexOf(name)) + " defined> " + name + " </identifier>") // varName
 		}
 		self.tokenizer.Advance()
 	}
@@ -81,6 +90,8 @@ func (self *CompilationEngine) compileClassVarDec() {
 }
 
 func (self *CompilationEngine) compileSubroutineDec() {
+	self.symbolTable.StartSubroutine()
+
 	self.outputToXmlFile("<subroutineDec>")
 
 	self.outputToXmlFile("<keyword> " + self.tokenizer.KeyWord() + " </keyword>") // ('constructor'|'function'|'method')
@@ -93,7 +104,7 @@ func (self *CompilationEngine) compileSubroutineDec() {
 	}
 	self.tokenizer.Advance()
 
-	self.outputToXmlFile("<identifier> " + self.tokenizer.Identifier() + " </identifier>") // subroutineName
+	self.outputToXmlFile("<identifier category=subroutine> " + self.tokenizer.Identifier() + " </identifier>") // subroutineName
 	self.tokenizer.Advance()
 
 	self.outputToXmlFile("<symbol> " + self.tokenizer.Symbol() + " </symbol>") // '('
@@ -116,10 +127,12 @@ func (self *CompilationEngine) compileParameterList() {
 		return
 	}
 
-	self.resolveType() // type
+	typeName := self.resolveType() // type
 	self.tokenizer.Advance()
 
-	self.outputToXmlFile("<identifier> " + self.tokenizer.KeyWord() + " </identifier>") // varName
+	name := self.tokenizer.Identifier()
+	self.symbolTable.Define(name, typeName, "arg")
+	self.outputToXmlFile("<identifier category=" + self.symbolTable.KindOf(name) + " kind=" + self.symbolTable.KindOf(name) + " index=" + strconv.Itoa(self.symbolTable.IndexOf(name)) + " defined> " + name + " </identifier>") // varName
 	self.tokenizer.Advance()
 
 	for {
@@ -127,10 +140,12 @@ func (self *CompilationEngine) compileParameterList() {
 			self.outputToXmlFile("<symbol> " + self.tokenizer.Symbol() + " </symbol>") // ','
 			self.tokenizer.Advance()
 
-			self.resolveType() // type
+			typeName := self.resolveType() // type
 			self.tokenizer.Advance()
 
-			self.outputToXmlFile("<identifier> " + self.tokenizer.KeyWord() + " </identifier>") // varName
+			name := self.tokenizer.Identifier()
+			self.symbolTable.Define(name, typeName, "arg")
+			self.outputToXmlFile("<identifier category=" + self.symbolTable.KindOf(name) + " kind=" + self.symbolTable.KindOf(name) + " index=" + strconv.Itoa(self.symbolTable.IndexOf(name)) + " defined> " + name + " </identifier>") // varName
 			self.tokenizer.Advance()
 		} else {
 			break
@@ -165,13 +180,16 @@ func (self *CompilationEngine) compileSubroutineBody() {
 func (self *CompilationEngine) compileVarDec() {
 	self.outputToXmlFile("<varDec>")
 
-	self.outputToXmlFile("<keyword> " + self.tokenizer.KeyWord() + " </keyword>") // var
+	kind := self.tokenizer.KeyWord()
+	self.outputToXmlFile("<keyword> " + kind + " </keyword>") // var
 	self.tokenizer.Advance()
 
-	self.resolveType() // type
+	typeName := self.resolveType() // type
 	self.tokenizer.Advance()
 
-	self.outputToXmlFile("<identifier> " + self.tokenizer.Identifier() + " </identifier>") // varName
+	name := self.tokenizer.Identifier()
+	self.symbolTable.Define(name, typeName, kind)
+	self.outputToXmlFile("<identifier category=" + self.symbolTable.KindOf(name) + " kind=" + self.symbolTable.KindOf(name) + " index=" + strconv.Itoa(self.symbolTable.IndexOf(name)) + " defined> " + name + " </identifier>") // varName
 	self.tokenizer.Advance()
 
 	for {
@@ -179,7 +197,9 @@ func (self *CompilationEngine) compileVarDec() {
 			self.outputToXmlFile("<symbol> " + self.tokenizer.Symbol() + " </symbol>") // ','
 			self.tokenizer.Advance()
 
-			self.outputToXmlFile("<identifier> " + self.tokenizer.Identifier() + " </identifier>") // varName
+			name := self.tokenizer.Identifier()
+			self.symbolTable.Define(name, typeName, kind)
+			self.outputToXmlFile("<identifier category=" + self.symbolTable.KindOf(name) + " kind=" + self.symbolTable.KindOf(name) + " index=" + strconv.Itoa(self.symbolTable.IndexOf(name)) + " defined> " + name + " </identifier>") // varName
 			self.tokenizer.Advance()
 		} else {
 			break
@@ -221,7 +241,8 @@ func (self CompilationEngine) compileLet() {
 	self.outputToXmlFile("<keyword> " + self.tokenizer.KeyWord() + " </keyword>") // let
 	self.tokenizer.Advance()
 
-	self.outputToXmlFile("<identifier> " + self.tokenizer.Identifier() + " </identifier>") // varName
+	name := self.tokenizer.Identifier()
+	self.outputToXmlFile("<identifier category=" + self.symbolTable.KindOf(name) + " kind=" + self.symbolTable.KindOf(name) + " index=" + strconv.Itoa(self.symbolTable.IndexOf(name)) + " used> " + name + " </identifier>") // varName
 	self.tokenizer.Advance()
 
 	if self.tokenizer.TokenType() == "SYMBOL" && self.tokenizer.Symbol() == "[" {
@@ -382,7 +403,8 @@ func (self CompilationEngine) compileTerm() {
 		self.outputToXmlFile("<keyword> " + self.tokenizer.KeyWord() + " </keyword>")
 		self.tokenizer.Advance()
 	} else if self.tokenizer.TokenType() == "IDENTIFIER" {
-		self.outputToXmlFile("<identifier> " + self.tokenizer.Identifier() + " </identifier>")
+		name := self.tokenizer.Identifier()
+		self.outputToXmlFile("<identifier category=" + self.symbolTable.KindOf(name) + " kind=" + self.symbolTable.KindOf(name) + " index=" + strconv.Itoa(self.symbolTable.IndexOf(name)) + " used> " + name + " </identifier>") // varName
 		self.tokenizer.Advance()
 
 		if self.tokenizer.TokenType() == "SYMBOL" {
@@ -441,19 +463,26 @@ func (self CompilationEngine) compileExpressionList() {
 	self.outputToXmlFile("</expressionList>")
 }
 
-func (self CompilationEngine) resolveType() {
+func (self CompilationEngine) resolveType() string {
+	typeName := ""
+
 	if self.tokenizer.TokenType() == "KEYWORD" {
-		self.outputToXmlFile("<keyword> " + self.tokenizer.KeyWord() + " </keyword>") // ('int'|'char'|'boolean')
+		typeName = self.tokenizer.KeyWord()
+		self.outputToXmlFile("<keyword> " + typeName + " </keyword>") // ('int'|'char'|'boolean')
 	} else if self.tokenizer.TokenType() == "IDENTIFIER" {
-		self.outputToXmlFile("<identifier> " + self.tokenizer.Identifier() + " </identifier>") // className
+		name := self.tokenizer.Identifier()
+		self.outputToXmlFile("<identifier category=" + self.symbolTable.KindOf(name) + " kind=" + self.symbolTable.KindOf(name) + " index=" + strconv.Itoa(self.symbolTable.IndexOf(name)) + " used> " + name + " </identifier>") // className
 	}
+
+	return typeName
 }
 
 func (self CompilationEngine) resolveSubroutineCall(isCalledInTerm bool) {
 	if isCalledInTerm {
 		// 何もしない
 	} else {
-		self.outputToXmlFile("<identifier> " + self.tokenizer.Identifier() + " </identifier>") // subroutineName | className | varName
+		name := self.tokenizer.Identifier()
+		self.outputToXmlFile("<identifier category=" + self.symbolTable.KindOf(name) + " kind=" + self.symbolTable.KindOf(name) + " index=" + strconv.Itoa(self.symbolTable.IndexOf(name)) + " used> " + name + " </identifier>") // className
 		self.tokenizer.Advance()
 	}
 
